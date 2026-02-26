@@ -44,7 +44,7 @@ st.markdown("""
             repeating-radial-gradient(circle at center, transparent 0, transparent 140px, rgba(0, 255, 204, 0.5) 141px, transparent 144px),
             linear-gradient(135deg, rgba(255, 0, 127, 0.05) 0%, rgba(0, 255, 204, 0.05) 50%, rgba(121, 40, 202, 0.05) 100%);
         background-size: 200% 200%;
-        animation: dynamicSweep 25s linear infinite;
+        animation: dynamicSweep 120s linear infinite;
         background-attachment: fixed;
     }
     
