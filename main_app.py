@@ -536,27 +536,56 @@ if run_app:
             async_processing=True
         )
 
-    # Note: the real-time Streamlit UI metrics cannot dynamically poll the processing thread 
-    # without a complex queue implementation. We rely primarily on the live video annotations.
-    if ctx and ctx.video_processor:
-        drowsy_ui.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-value">LIVE <span class="metric-value-span">/ THRESH {CLOSED_FRAME_THRESHOLD}</span></div>
-                <div class="metric-label">Eye Status Monitoring</div>
-            </div>
-            """, unsafe_allow_html=True
-        )
-        
-        yawn_ui.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-value">LIVE <span class="metric-value-span">/ THRESH {YAWN_FRAME_THRESHOLD}</span></div>
-                <div class="metric-label">Fatigue Monitoring</div>
-            </div>
-            """, unsafe_allow_html=True
-        )
-        status_ui.markdown('<div class="status-ok">WEBRTC SYSTEM NOMINAL</div>', unsafe_allow_html=True)
+    # We need a continuous loop to poll the video processor and update the Streamlit UI (metrics, audio, speech)
+    if ctx and ctx.state.playing:
+        while True:
+            if ctx.video_processor:
+                closed = ctx.video_processor.closed_frames
+                yawn = ctx.video_processor.yawn_frames
+                
+                drowsy_ui.markdown(
+                    f"""
+                    <div class="metric-card">
+                        <div class="metric-value">{closed} <span class="metric-value-span">/ {CLOSED_FRAME_THRESHOLD}</span></div>
+                        <div class="metric-label">Eye Closure</div>
+                    </div>
+                    """, unsafe_allow_html=True
+                )
+                
+                yawn_ui.markdown(
+                    f"""
+                    <div class="metric-card">
+                        <div class="metric-value">{int(yawn)} <span class="metric-value-span">/ {YAWN_FRAME_THRESHOLD}</span></div>
+                        <div class="metric-label">Yawn Events</div>
+                    </div>
+                    """, unsafe_allow_html=True
+                )
+                
+                if closed >= CLOSED_FRAME_THRESHOLD or yawn >= YAWN_FRAME_THRESHOLD:
+                    alert_type = "SLEEP DETECTED" if closed >= CLOSED_FRAME_THRESHOLD else "FATIGUE (YAWN)"
+                    status_ui.markdown(f'<div class="status-alert">⚠️ {alert_type}</div>', unsafe_allow_html=True)
+                    
+                    if not st.session_state.alarm_on:
+                        st.session_state.alarm_on = True
+                        
+                        # Use Browser Web Speech API instead of PyTTSX3 to make it work on the cloud!
+                        speech_text = "Sleep detected! Please wake up immediately!" if closed >= CLOSED_FRAME_THRESHOLD else "Yawning detected! Driver fatigue warning."
+                        js_speech = f"""
+                        <script>
+                            var msg = new SpeechSynthesisUtterance("{speech_text}");
+                            window.speechSynthesis.speak(msg);
+                        </script>
+                        """
+                        
+                        audio_html = get_audio_html("alarm.wav")
+                        # Combine alarm audio with browser speech synth
+                        audio_placeholder.markdown(audio_html + js_speech, unsafe_allow_html=True)
+                else:
+                    st.session_state.alarm_on = False
+                    audio_placeholder.empty()
+                    status_ui.markdown('<div class="status-ok">WEBRTC SYSTEM NOMINAL</div>', unsafe_allow_html=True)
+            
+            time.sleep(0.5)
 
 else:
     st.markdown("""
