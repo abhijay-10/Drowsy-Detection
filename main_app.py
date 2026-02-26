@@ -569,7 +569,7 @@ if run_app:
                         st.session_state.alarm_on = True
                         
                         # Use Browser Web Speech API instead of PyTTSX3 to make it work on the cloud!
-                        speech_text = "Sleep detected! Please wake up immediately!" if closed >= CLOSED_FRAME_THRESHOLD else "Yawning detected! Driver fatigue warning."
+                        speech_text = "Drowsy detects." if closed >= CLOSED_FRAME_THRESHOLD else "Yawn detects."
                         js_speech = f"""
                         <script>
                             var msg = new SpeechSynthesisUtterance("{speech_text}");
