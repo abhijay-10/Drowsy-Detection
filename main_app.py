@@ -436,7 +436,13 @@ col_video, col_metrics, col_padding = st.columns([3, 1.2, 0.2], gap="large")
 # --- Dashboard Layout ---
 col_video, col_metrics, col_padding = st.columns([3, 1.2, 0.2], gap="large")
 
-RTC_CONFIGURATION = {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+RTC_CONFIGURATION = {"iceServers": [
+    {"urls": ["stun:stun.l.google.com:19302"]},
+    {"urls": ["stun:stun1.l.google.com:19302"]},
+    {"urls": ["stun:stun2.l.google.com:19302"]},
+    {"urls": ["stun:stun3.l.google.com:19302"]},
+    {"urls": ["stun:stun4.l.google.com:19302"]}
+]}
 
 with col_video:
     st.markdown("### Live Feed Monitor")
@@ -523,7 +529,14 @@ if run_app:
             mode=WebRtcMode.SENDRECV,
             rtc_configuration=RTC_CONFIGURATION,
             video_processor_factory=VideoProcessor,
-            media_stream_constraints={"video": True, "audio": False},
+            media_stream_constraints={
+                "video": {
+                    "width": {"ideal": 640, "max": 800},
+                    "height": {"ideal": 480, "max": 600},
+                    "frameRate": {"ideal": 15, "max": 30}
+                }, 
+                "audio": False
+            },
             async_processing=True,
             desired_playing_state=True
         )
