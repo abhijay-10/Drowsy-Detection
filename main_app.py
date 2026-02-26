@@ -522,26 +522,40 @@ class VideoProcessor:
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-if run_app:
-    with col_video:
-        ctx = webrtc_streamer(
-            key="drowsy-detector",
-            mode=WebRtcMode.SENDRECV,
-            rtc_configuration=RTC_CONFIGURATION,
-            video_processor_factory=VideoProcessor,
-            media_stream_constraints={
-                "video": {
-                    "width": {"ideal": 640, "max": 800},
-                    "height": {"ideal": 480, "max": 600},
-                    "frameRate": {"ideal": 15, "max": 30}
-                }, 
-                "audio": False
-            },
-            async_processing=True,
-            desired_playing_state=True
-        )
+with col_video:
+    if not run_app:
+        # Hide the WebRTC container visually when offline so we only see the customized offline warning
+        st.markdown("""
+        <style>
+            #drowsy-detector { display: none !important; }
+            iframe[title="streamlit_webrtc.webrtc_streamer"] { display: none !important; }
+        </style>
+        <div style='text-align: left; padding: 60px 40px; background: #0d1323; border-radius: 6px; border: 1px dashed rgba(0, 255, 204, 0.3); max-width: 100%;'>
+            <h2 style='color: #ffffff; font-size: 2rem; margin-bottom: 20px; font-weight: 800; letter-spacing: -1px;'>Scanner Offline</h2>
+            <p style='color: #94a3b8; font-size: 1.1rem; font-weight: 500;'>Initialize the scanner using the sidebar toggle to begin telemetry feed.</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # We need a continuous loop to poll the video processor and update the Streamlit UI (metrics, audio, speech)
+    # Always keep the component mounted in the DOM to prevent expensive hard-reloads of WebRTC modules
+    ctx = webrtc_streamer(
+        key="drowsy-detector",
+        mode=WebRtcMode.SENDRECV,
+        rtc_configuration=RTC_CONFIGURATION,
+        video_processor_factory=VideoProcessor,
+        media_stream_constraints={
+            "video": {
+                "width": {"ideal": 640, "max": 800},
+                "height": {"ideal": 480, "max": 600},
+                "frameRate": {"ideal": 15, "max": 30}
+            }, 
+            "audio": False
+        },
+        async_processing=True,
+        desired_playing_state=run_app
+    )
+
+if run_app:
+    # Continuous loop to poll the video processor and update the Streamlit UI metrics and audio/speech
     if ctx and ctx.state.playing:
         while True:
             if ctx.video_processor:
@@ -573,7 +587,7 @@ if run_app:
                     if not st.session_state.alarm_on:
                         st.session_state.alarm_on = True
                         
-                        # Use Browser Web Speech API instead of PyTTSX3 to make it work on the cloud!
+                        # Browser Web Speech API
                         speech_text = "Drowsy detects." if closed >= CLOSED_FRAME_THRESHOLD else "Yawn detects."
                         js_speech = f"""
                         <script>
@@ -591,13 +605,12 @@ if run_app:
                             if (maleVoice) {{
                                 msg.voice = maleVoice;
                             }}
-                            msg.pitch = 0.8; // Lower pitch to sound deeper/masculine
+                            msg.pitch = 0.8; 
                             window.speechSynthesis.speak(msg);
                         </script>
                         """
                         
                         audio_html = get_audio_html("alarm.wav")
-                        # Combine alarm audio with browser speech synth
                         audio_placeholder.markdown(audio_html + js_speech, unsafe_allow_html=True)
                 else:
                     st.session_state.alarm_on = False
@@ -605,13 +618,6 @@ if run_app:
                     status_ui.markdown('<div class="status-ok">WEBRTC SYSTEM NOMINAL</div>', unsafe_allow_html=True)
             
             time.sleep(0.5)
-
 else:
-    st.markdown("""
-        <div style='text-align: left; padding: 60px 40px; background: #0d1323; border-radius: 6px; border: 1px dashed rgba(0, 255, 204, 0.3); max-width: 100%;'>
-            <h2 style='color: #ffffff; font-size: 2rem; margin-bottom: 20px; font-weight: 800; letter-spacing: -1px;'>Scanner Offline</h2>
-            <p style='color: #94a3b8; font-size: 1.1rem; font-weight: 500;'>Initialize the scanner using the sidebar toggle to begin telemetry feed.</p>
-        </div>
-    """, unsafe_allow_html=True)
     st.session_state.alarm_on = False
     audio_placeholder.empty()
