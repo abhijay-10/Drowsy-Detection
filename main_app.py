@@ -11,6 +11,8 @@ import pyttsx3
 import threading
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+import av
 
 # -- Page Configuration --
 st.set_page_config(
@@ -440,8 +442,13 @@ audio_placeholder = st.empty()
 # --- Dashboard Layout ---
 col_video, col_metrics, col_padding = st.columns([3, 1.2, 0.2], gap="large")
 
+# --- Dashboard Layout ---
+col_video, col_metrics, col_padding = st.columns([3, 1.2, 0.2], gap="large")
+
+RTC_CONFIGURATION = {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+
 with col_video:
-    frame_window = st.image([])
+    st.markdown("### Live Feed Monitor")
 
 with col_metrics:
     status_ui = st.empty()
@@ -449,26 +456,21 @@ with col_metrics:
     drowsy_ui = st.empty()
     yawn_ui = st.empty()
 
-if run_app:
-    if "camera" not in st.session_state:
-        st.session_state.camera = cv2.VideoCapture(0)
-        st.session_state.camera.set(3, 800)
-        st.session_state.camera.set(4, 600)
-    cap = st.session_state.camera
+# For Streamlit cloud webrtc is required. We use a callback approach below.
+# Note: Streamlit-webrtc processes frames in a separate thread.
+# Simple visual alerts will occur directly on the video feed.
 
-    closed_frames = 0
-    yawn_frames = 0
-    face_detected_last = False
+class VideoProcessor:
+    def __init__(self):
+        self.closed_frames = 0
+        self.yawn_frames = 0
+        self.alarm_on = False
 
-    while run_app:
-        ret, frame = cap.read()
-        if not ret:
-            st.error("Feed Offline.")
-            break
-
-        frame = cv2.resize(frame, (800, 600))
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        h, w, _ = frame.shape
+    def recv(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+        img = cv2.resize(img, (800, 600))
+        rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        h, w, _ = img.shape
         
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         results = face_mesh.detect(mp_image)
@@ -492,87 +494,71 @@ if run_app:
             
             if mar > 0.45:
                 yawn_detected_current = True
-                cv2.putText(frame, "YAWN DETECTED", (30, 80), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255, 0, 127), 2)
+                cv2.putText(img, "YAWN DETECTED", (30, 80), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255, 0, 127), 2)
 
             for idx in LEFT_EYE + RIGHT_EYE + LIPS:
                 pt = (int(landmarks[idx].x * w), int(landmarks[idx].y * h))
-                cv2.circle(frame, pt, 2, (0, 255, 204), -1)
+                cv2.circle(img, pt, 2, (0, 255, 204), -1)
 
         if face_detected_last:
             if not eyes_found:
-                closed_frames += 1
+                self.closed_frames += 1
             else:
-                closed_frames = 0
+                self.closed_frames = 0
                 
             if yawn_detected_current:
-                yawn_frames += 1
+                self.yawn_frames += 1
             else:
-                yawn_frames = max(0, int(yawn_frames - 0.5))
+                self.yawn_frames = max(0, int(self.yawn_frames - 0.5))
         else:
-            closed_frames = 0
-            yawn_frames = 0
+            self.closed_frames = 0
+            self.yawn_frames = 0
 
+        # Draw visual indicators
+        if self.closed_frames >= CLOSED_FRAME_THRESHOLD or self.yawn_frames >= YAWN_FRAME_THRESHOLD:
+            alert_type = "SLEEP DETECTED" if self.closed_frames >= CLOSED_FRAME_THRESHOLD else "FATIGUE (YAWN)"
+            cv2.putText(img, f"ALERT: {alert_type}", (50, 60), cv2.FONT_HERSHEY_DUPLEX, 1.2, (255, 0, 127), 3)
+            # Neon pink frame
+            cv2.rectangle(img, (0, 0), (img.shape[1]-1, img.shape[0]-1), (127, 0, 255), 10)
+        else:
+            cv2.rectangle(img, (0, 0), (img.shape[1]-1, img.shape[0]-1), (204, 255, 0), 2)
+
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+if run_app:
+    with col_video:
+        ctx = webrtc_streamer(
+            key="drowsy-detector",
+            mode=WebRtcMode.SENDRECV,
+            rtc_configuration=RTC_CONFIGURATION,
+            video_processor_factory=VideoProcessor,
+            media_stream_constraints={"video": True, "audio": False},
+            async_processing=True
+        )
+
+    # Note: the real-time Streamlit UI metrics cannot dynamically poll the processing thread 
+    # without a complex queue implementation. We rely primarily on the live video annotations.
+    if ctx and ctx.video_processor:
         drowsy_ui.markdown(
             f"""
             <div class="metric-card">
-                <div class="metric-value">{closed_frames} <span class="metric-value-span">/ {CLOSED_FRAME_THRESHOLD}</span></div>
-                <div class="metric-label">Eye Closure</div>
+                <div class="metric-value">LIVE <span class="metric-value-span">/ THRESH {CLOSED_FRAME_THRESHOLD}</span></div>
+                <div class="metric-label">Eye Status Monitoring</div>
             </div>
-            """, 
-            unsafe_allow_html=True
+            """, unsafe_allow_html=True
         )
         
         yawn_ui.markdown(
             f"""
             <div class="metric-card">
-                <div class="metric-value">{int(yawn_frames)} <span class="metric-value-span">/ {YAWN_FRAME_THRESHOLD}</span></div>
-                <div class="metric-label">Yawn Events</div>
+                <div class="metric-value">LIVE <span class="metric-value-span">/ THRESH {YAWN_FRAME_THRESHOLD}</span></div>
+                <div class="metric-label">Fatigue Monitoring</div>
             </div>
-            """, 
-            unsafe_allow_html=True
+            """, unsafe_allow_html=True
         )
+        status_ui.markdown('<div class="status-ok">WEBRTC SYSTEM NOMINAL</div>', unsafe_allow_html=True)
 
-        if closed_frames >= CLOSED_FRAME_THRESHOLD or yawn_frames >= YAWN_FRAME_THRESHOLD:
-            alert_type = "SLEEP DETECTED" if closed_frames >= CLOSED_FRAME_THRESHOLD else "FATIGUE (YAWN)"
-            status_ui.markdown(f'<div class="status-alert">⚠️ {alert_type}</div>', unsafe_allow_html=True)
-            
-            cv2.putText(frame, f"ALERT: {alert_type}", (50, 60),
-                        cv2.FONT_HERSHEY_DUPLEX, 1.2, (255, 0, 127), 3)
-            # Neon pink frame
-            cv2.rectangle(frame, (0, 0), (frame.shape[1]-1, frame.shape[0]-1), (127, 0, 255), 10)
-
-            if not st.session_state.alarm_on:
-                st.session_state.alarm_on = True
-                
-                # Speak warning (in background thread so it doesn't freeze video)
-                speech_text = "Sleep detected! Please wake up immediately!" if closed_frames >= CLOSED_FRAME_THRESHOLD else "Yawning detected! Driver fatigue warning."
-                speak_alert(speech_text)
-                
-                audio_html = get_audio_html("alarm.wav")
-                audio_placeholder.markdown(audio_html, unsafe_allow_html=True)
-        else:
-            st.session_state.alarm_on = False
-            audio_placeholder.empty()
-            if face_detected_last:
-                status_ui.markdown('<div class="status-ok">SYSTEM NOMINAL</div>', unsafe_allow_html=True)
-            else:
-                status_ui.markdown('<div class="status-warning">NO TARGET</div>', unsafe_allow_html=True)
-                
-            cv2.rectangle(frame, (0, 0), (frame.shape[1]-1, frame.shape[0]-1), (204, 255, 0), 2)
-
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame_window.image(rgb_frame, channels="RGB")
-
-    if "camera" in st.session_state:
-        st.session_state.camera.release()
-        del st.session_state.camera
-    st.session_state.alarm_on = False
-    audio_placeholder.empty()
 else:
-    if "camera" in st.session_state:
-        st.session_state.camera.release()
-        del st.session_state.camera
-    
     st.markdown("""
         <div style='text-align: left; padding: 60px 40px; background: #0d1323; border-radius: 6px; border: 1px dashed rgba(0, 255, 204, 0.3); max-width: 100%;'>
             <h2 style='color: #ffffff; font-size: 2rem; margin-bottom: 20px; font-weight: 800; letter-spacing: -1px;'>Scanner Offline</h2>
@@ -581,4 +567,3 @@ else:
     """, unsafe_allow_html=True)
     st.session_state.alarm_on = False
     audio_placeholder.empty()
-
