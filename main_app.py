@@ -573,6 +573,20 @@ if run_app:
                         js_speech = f"""
                         <script>
                             var msg = new SpeechSynthesisUtterance("{speech_text}");
+                            var voices = window.speechSynthesis.getVoices();
+                            var maleVoice = voices.find(v => 
+                                v.name.toLowerCase().includes('male') || 
+                                v.name.toLowerCase().includes('david') || 
+                                v.name.toLowerCase().includes('mark') ||
+                                v.name.toLowerCase().includes('andrew') ||
+                                v.name.toLowerCase().includes('daniel') ||
+                                v.name.toLowerCase().includes('guy') ||
+                                v.name.toLowerCase().includes('george')
+                            );
+                            if (maleVoice) {{
+                                msg.voice = maleVoice;
+                            }}
+                            msg.pitch = 0.8; // Lower pitch to sound deeper/masculine
                             window.speechSynthesis.speak(msg);
                         </script>
                         """
