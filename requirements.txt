@@ -4,5 +4,5 @@ numpy
 mediapipe
 scipy
 pyttsx3
-
-
+streamlit-webrtc
+av
