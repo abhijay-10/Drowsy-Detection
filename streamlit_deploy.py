@@ -405,6 +405,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.write("") # small spacer
+
+col_btn1, col_btn2, col_btn3 = st.columns([1.5, 2, 3])
+with col_btn1:
+    if st.button("Start Drowsy Detection", type="primary", use_container_width=True):
+        st.session_state.run_app = True
+with col_btn2:
+    st.markdown('<div class="custom-btn-text" style="padding-top: 15px; margin-left: -5px;">Monitor Driver Status</div>', unsafe_allow_html=True)
+
 st.sidebar.title("Telemetry Control")
 st.sidebar.markdown("Engage the systems below to begin.")
 
