@@ -451,7 +451,7 @@ with col_metrics:
 
 if run_app:
     if "camera" not in st.session_state:
-        st.session_state.camera = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        st.session_state.camera = cv2.VideoCapture(0)
         st.session_state.camera.set(3, 800)
         st.session_state.camera.set(4, 600)
     cap = st.session_state.camera
@@ -581,3 +581,4 @@ else:
     """, unsafe_allow_html=True)
     st.session_state.alarm_on = False
     audio_placeholder.empty()
+
