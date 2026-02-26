@@ -410,20 +410,16 @@ st.sidebar.markdown("Engage the systems below to begin.")
 
 if 'run_app' not in st.session_state:
     st.session_state.run_app = False
-if 'camera_active' not in st.session_state:
-    st.session_state.camera_active = False
 
 col1, col2 = st.sidebar.columns(2)
 with col1:
     if st.button("Start Scanner", use_container_width=True):
         st.session_state.run_app = True
-        st.session_state.camera_active = True
 with col2:
     if st.button("Stop Scanner", use_container_width=True):
         st.session_state.run_app = False
 
 run_app = st.session_state.run_app
-camera_active = st.session_state.camera_active
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Sensitivity Matrix")
@@ -555,7 +551,7 @@ with col_video:
             "audio": False
         },
         async_processing=True,
-        desired_playing_state=camera_active
+        desired_playing_state=run_app
     )
 
 if run_app:
