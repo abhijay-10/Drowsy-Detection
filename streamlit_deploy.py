@@ -563,69 +563,69 @@ with col_video:
     )
 
 if run_app:
-    # Continuous loop to poll the video processor and update the Streamlit UI metrics and audio/speech
+    # Poll the video processor and update the Streamlit UI metrics and audio/speech every rerun
     if ctx and ctx.state.playing:
-        while True:
-            if ctx.video_processor:
-                closed = ctx.video_processor.closed_frames
-                yawn = ctx.video_processor.yawn_frames
-                
-                drowsy_ui.markdown(
-                    f"""
-                    <div class="metric-card">
-                        <div class="metric-value">{closed} <span class="metric-value-span">/ {CLOSED_FRAME_THRESHOLD}</span></div>
-                        <div class="metric-label">Eye Closure</div>
-                    </div>
-                    """, unsafe_allow_html=True
-                )
-                
-                yawn_ui.markdown(
-                    f"""
-                    <div class="metric-card">
-                        <div class="metric-value">{int(yawn)} <span class="metric-value-span">/ {YAWN_FRAME_THRESHOLD}</span></div>
-                        <div class="metric-label">Yawn Events</div>
-                    </div>
-                    """, unsafe_allow_html=True
-                )
-                
-                if closed >= CLOSED_FRAME_THRESHOLD or yawn >= YAWN_FRAME_THRESHOLD:
-                    alert_type = "SLEEP DETECTED" if closed >= CLOSED_FRAME_THRESHOLD else "FATIGUE (YAWN)"
-                    status_ui.markdown(f'<div class="status-alert">⚠️ {alert_type}</div>', unsafe_allow_html=True)
-                    
-                    if not st.session_state.alarm_on:
-                        st.session_state.alarm_on = True
-                        
-                        # Browser Web Speech API
-                        speech_text = "Drowsy detects." if closed >= CLOSED_FRAME_THRESHOLD else "Yawn detects."
-                        js_speech = f"""
-                        <script>
-                            var msg = new SpeechSynthesisUtterance("{speech_text}");
-                            var voices = window.speechSynthesis.getVoices();
-                            var maleVoice = voices.find(v => 
-                                v.name.toLowerCase().includes('male') || 
-                                v.name.toLowerCase().includes('david') || 
-                                v.name.toLowerCase().includes('mark') ||
-                                v.name.toLowerCase().includes('andrew') ||
-                                v.name.toLowerCase().includes('daniel') ||
-                                v.name.toLowerCase().includes('guy') ||
-                                v.name.toLowerCase().includes('george')
-                            );
-                            if (maleVoice) {{
-                                msg.voice = maleVoice;
-                            }}
-                            msg.pitch = 0.8; 
-                            window.speechSynthesis.speak(msg);
-                        </script>
-                        """
-                        
-                        audio_html = get_audio_html("alarm.wav")
-                        audio_placeholder.markdown(audio_html + js_speech, unsafe_allow_html=True)
-                else:
-                    st.session_state.alarm_on = False
-                    audio_placeholder.empty()
-                    status_ui.markdown('<div class="status-ok">WEBRTC SYSTEM NOMINAL</div>', unsafe_allow_html=True)
+        if ctx.video_processor:
+            closed = ctx.video_processor.closed_frames
+            yawn = ctx.video_processor.yawn_frames
             
-            time.sleep(0.5)
+            drowsy_ui.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-value">{closed} <span class="metric-value-span">/ {CLOSED_FRAME_THRESHOLD}</span></div>
+                    <div class="metric-label">Eye Closure</div>
+                </div>
+                """, unsafe_allow_html=True
+            )
+            
+            yawn_ui.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-value">{int(yawn)} <span class="metric-value-span">/ {YAWN_FRAME_THRESHOLD}</span></div>
+                    <div class="metric-label">Yawn Events</div>
+                </div>
+                """, unsafe_allow_html=True
+            )
+            
+            if closed >= CLOSED_FRAME_THRESHOLD or yawn >= YAWN_FRAME_THRESHOLD:
+                alert_type = "SLEEP DETECTED" if closed >= CLOSED_FRAME_THRESHOLD else "FATIGUE (YAWN)"
+                status_ui.markdown(f'<div class="status-alert">⚠️ {alert_type}</div>', unsafe_allow_html=True)
+                
+                if not st.session_state.alarm_on:
+                    st.session_state.alarm_on = True
+                    
+                    # Browser Web Speech API
+                    speech_text = "Drowsy detects." if closed >= CLOSED_FRAME_THRESHOLD else "Yawn detects."
+                    js_speech = f"""
+                    <script>
+                        var msg = new SpeechSynthesisUtterance("{speech_text}");
+                        var voices = window.speechSynthesis.getVoices();
+                        var maleVoice = voices.find(v => 
+                            v.name.toLowerCase().includes('male') || 
+                            v.name.toLowerCase().includes('david') || 
+                            v.name.toLowerCase().includes('mark') ||
+                            v.name.toLowerCase().includes('andrew') ||
+                            v.name.toLowerCase().includes('daniel') ||
+                            v.name.toLowerCase().includes('guy') ||
+                            v.name.toLowerCase().includes('george')
+                        );
+                        if (maleVoice) {{
+                            msg.voice = maleVoice;
+                        }}
+                        msg.pitch = 0.8; 
+                        window.speechSynthesis.speak(msg);
+                    </script>
+                    """
+                    
+                    audio_html = get_audio_html("alarm.wav")
+                    audio_placeholder.markdown(audio_html + js_speech, unsafe_allow_html=True)
+            else:
+                st.session_state.alarm_on = False
+                audio_placeholder.empty()
+                status_ui.markdown('<div class="status-ok">WEBRTC SYSTEM NOMINAL</div>', unsafe_allow_html=True)
+        
+        time.sleep(0.5)
+        st.rerun()
 else:
     st.session_state.alarm_on = False
     audio_placeholder.empty()
