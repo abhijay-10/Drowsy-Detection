@@ -470,8 +470,10 @@ class VideoProcessor:
         self.closed_frames = 0
         self.yawn_frames = 0
         self.alarm_on = False
+        self.frame_processed = False
 
     def recv(self, frame):
+        self.frame_processed = True
         img = frame.to_ndarray(format="bgr24")
         img = cv2.resize(img, (800, 600))
         rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -564,8 +566,9 @@ with col_video:
 
 if run_app:
     # Poll the video processor and update the Streamlit UI metrics and audio/speech every rerun
+    # ONLY IF WebRTC has completely established and finished processing at least one frame
     if ctx and ctx.state.playing:
-        if ctx.video_processor:
+        if ctx.video_processor and getattr(ctx.video_processor, 'frame_processed', False):
             closed = ctx.video_processor.closed_frames
             yawn = ctx.video_processor.yawn_frames
             
@@ -623,9 +626,9 @@ if run_app:
                 st.session_state.alarm_on = False
                 audio_placeholder.empty()
                 status_ui.markdown('<div class="status-ok">WEBRTC SYSTEM NOMINAL</div>', unsafe_allow_html=True)
-        
-        time.sleep(0.5)
-        st.rerun()
+            
+            time.sleep(1.2)
+            st.rerun()
 else:
     st.session_state.alarm_on = False
     audio_placeholder.empty()
